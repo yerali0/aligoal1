@@ -238,14 +238,21 @@ function Index() {
   const roundScore = scoreOf(results);
 
   const startRound = useCallback(() => {
-    primeAudio();
-    setDeck(shuffle(pool));
-    setIndex(0);
-    setResults([]);
-    setLeft(seconds);
-    setExiting(null);
-    setSkinSeed(Math.floor(Math.random() * 1000));
-    setPhase("playing");
+    try {
+      primeAudio();
+      setDeck(shuffle(pool));
+      setIndex(0);
+      setResults([]);
+      setLeft(seconds);
+      setExiting(null);
+      setSkinSeed(Math.floor(Math.random() * 1000));
+      setPhase("playing");
+    } catch (err) {
+      console.error(err);
+      // Fail gracefully back to the handoff screen so the app doesn't show
+      // the generic error boundary in prod-like environments.
+      setPhase("handoff");
+    }
   }, [pool, seconds]);
 
   const newGame = () => {

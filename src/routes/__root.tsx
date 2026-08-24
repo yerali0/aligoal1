@@ -11,6 +11,8 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
+import { describeError } from "../lib/error-capture";
+import DevErrorOverlay from "../components/dev-error-overlay";
 
 function NotFoundComponent() {
   return (
@@ -40,16 +42,19 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   useEffect(() => {
     reportLovableError(error, { boundary: "tanstack_root_error_component" });
   }, [error]);
-
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <h1 className="text-xl font-semibold tracking-tight text-foreground">
-          This page didn't load
-        </h1>
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">This page didn't load</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           Something went wrong on our end. You can try refreshing or head back home.
         </p>
+        {import.meta.env.DEV && (
+          <details className="mt-4 text-left rounded border border-border bg-card p-3 text-sm">
+            <summary className="cursor-pointer font-medium">Show error details</summary>
+            <pre className="whitespace-pre-wrap mt-2 text-xs">{describeError(error)}</pre>
+          </details>
+        )}
         <div className="mt-6 flex flex-wrap justify-center gap-2">
           <button
             onClick={() => {
@@ -129,6 +134,7 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
       <Outlet />
+      {import.meta.env.DEV && <DevErrorOverlay />}
     </QueryClientProvider>
   );
 }
