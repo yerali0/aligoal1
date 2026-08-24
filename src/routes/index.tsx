@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   CheckCircle2,
+  X,
   LockKeyhole,
   Timer,
   Trophy,
