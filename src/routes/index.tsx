@@ -2,9 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
-  CheckCircle2,
   X,
-  LockKeyhole,
   Timer,
   Trophy,
   RotateCcw,
@@ -12,6 +10,14 @@ import {
   Shuffle,
   Target,
   Users,
+  ArrowLeft,
+  Eye,
+  Moon,
+  PackageOpen,
+  Play,
+  ShoppingBag,
+  Sparkles,
+  Sun,
 } from "lucide-react";
 import { PACKS, type Player } from "@/data/players";
 import { fetchPacks } from "@/lib/packs";
@@ -81,8 +87,20 @@ const CLUB_NAMES = [
 type Phase = "teams" | "setup" | "handoff" | "playing" | "standings" | "winner";
 type Result = { player: Player; correct: boolean };
 type Team = { id: number; name: string; score: number };
+type Screen = "menu" | "game" | "packs";
 
 const PACK_UNLOCK_STORAGE_KEY = "kick-off-alias-pack-unlocks";
+const PACK_ARTWORK: Record<string, string> = {
+  premier: "/packs/premier-league.svg",
+  laliga: "/packs/laliga.svg",
+  seriea: "/packs/serie-a.svg",
+  bundesliga: "/packs/bundesliga.svg",
+  ligue1: "/packs/ligue-1.svg",
+  mls: "/packs/mls.svg",
+  legends2000s: "/packs/legends-2000s.svg",
+  worldcup: "/packs/world-cup.svg",
+};
+const NON_LEAGUE_PACK_IDS = new Set(["top5", "womens", "legends2000s", "worldcup"]);
 
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
@@ -100,7 +118,10 @@ function randomClub(taken: string[]) {
 }
 
 function Index() {
-  const [phase, setPhase] = useState<Phase>("teams");
+  const [screen, setScreen] = useState<Screen>("menu");
+  const [phase, setPhase] = useState<Phase>("setup");
+  const [theme, setTheme] = useState<"dark" | "light">("dark");
+  const [inspectedPackId, setInspectedPackId] = useState<string | null>(null);
   const [seconds, setSeconds] = useState(60);
   const [target, setTarget] = useState(50);
   const [packIds, setPackIds] = useState<string[]>(["top5"]);
@@ -110,6 +131,16 @@ function Index() {
   const [unlockProgressLoaded, setUnlockProgressLoaded] = useState(false);
   const [watchingPackId, setWatchingPackId] = useState<string | null>(null);
   const [adSecondsRemaining, setAdSecondsRemaining] = useState(3);
+
+  useEffect(() => {
+    const savedTheme = window.localStorage.getItem("aligoal-theme");
+    if (savedTheme === "light" || savedTheme === "dark") setTheme(savedTheme);
+  }, []);
+
+  useEffect(() => {
+    document.documentElement.classList.toggle("light", theme === "light");
+    window.localStorage.setItem("aligoal-theme", theme);
+  }, [theme]);
 
   const [teams, setTeams] = useState<Team[]>([
     { id: 1, name: CLUB_NAMES[0]!, score: 0 },
@@ -334,6 +365,125 @@ function Index() {
     setWatchingPackId(pack.id);
   };
 
+  const ownedLeaguePacks = packs.filter(
+    (pack) => !NON_LEAGUE_PACK_IDS.has(pack.id) && isPackUnlocked(pack),
+  );
+
+  const ThemeToggle = () => (
+    <button
+      type="button"
+      onClick={() => setTheme((current) => (current === "dark" ? "light" : "dark"))}
+      className="grid size-11 place-items-center rounded-full border border-border bg-card text-primary shadow-sm transition-transform hover:scale-105"
+      aria-label={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+      title={`Switch to ${theme === "dark" ? "light" : "dark"} theme`}
+    >
+      {theme === "dark" ? <Sun className="size-5" /> : <Moon className="size-5" />}
+    </button>
+  );
+
+  if (screen === "menu") {
+    return (
+      <main className="menu-shell mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-6 sm:px-8 sm:py-10">
+        <header className="flex items-start justify-between">
+          <div>
+            <p className="font-display text-sm tracking-[0.35em] text-primary">AliGoal</p>
+            <h1 className="mt-3 max-w-xl text-7xl leading-[0.82] text-glow sm:text-9xl">PLAY THE BEAUTIFUL GAME</h1>
+          </div>
+          <ThemeToggle />
+        </header>
+        <section className="menu-hero mt-auto grid gap-5 pb-6 pt-16 sm:grid-cols-[1.2fr_0.8fr] sm:items-end sm:gap-8">
+          <button
+            type="button"
+            onClick={() => { setScreen("game"); setPhase("setup"); }}
+            className="menu-tile menu-tile-play group text-left"
+          >
+            <span className="flex items-center gap-3 text-primary"><Play className="size-5 fill-current" /> MAIN MATCH</span>
+            <span className="mt-10 block font-display text-6xl leading-none sm:text-8xl">PLAY</span>
+            <span className="mt-3 block max-w-xs text-sm text-white/65">Set the rules, name your teams, and race to the final whistle.</span>
+            <span className="mt-8 flex items-center gap-2 font-display text-xl text-primary">ENTER GAME <ArrowLeft className="size-5 rotate-180 transition-transform group-hover:translate-x-1" /></span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setScreen("packs")}
+            className="menu-tile menu-tile-packs group text-left"
+          >
+            <span className="flex items-center gap-3 text-primary"><ShoppingBag className="size-5" /> PACK SHOP</span>
+            <span className="mt-10 block font-display text-6xl leading-none sm:text-8xl">PACKS</span>
+            <span className="mt-3 block text-sm text-white/65">Build your player pool with leagues from around the world.</span>
+            <span className="mt-8 flex items-center gap-2 font-display text-xl text-primary">BROWSE PACKS <ArrowLeft className="size-5 rotate-180 transition-transform group-hover:translate-x-1" /></span>
+          </button>
+        </section>
+      </main>
+    );
+  }
+
+  if (screen === "packs") {
+    const inspectedPack = packs.find((pack) => pack.id === inspectedPackId);
+    return (
+      <main className="mx-auto min-h-screen w-full max-w-6xl px-5 py-6 sm:px-8 sm:py-10">
+        <header className="flex items-start justify-between gap-4">
+          <div>
+            <button type="button" onClick={() => setScreen("menu")} className="mb-5 flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"><ArrowLeft className="size-4" /> MAIN MENU</button>
+            <p className="font-display text-sm tracking-[0.35em] text-primary">AliGoal · PACK SHOP</p>
+            <h1 className="mt-2 text-6xl leading-none text-glow sm:text-8xl">BUILD YOUR POOL</h1>
+            <p className="mt-3 max-w-lg text-sm text-muted-foreground">Unlock leagues, then bring the cards into your next match.</p>
+          </div>
+        </header>
+        <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {packs.map((pack, packIndex) => {
+            const unlocked = isPackUnlocked(pack);
+            const prerequisite = pack.requires ? packs.find((candidate) => candidate.id === pack.requires) : null;
+            const prerequisiteUnlocked = !prerequisite || isPackUnlocked(prerequisite);
+            const watched = adsWatched[pack.id] ?? 0;
+            const required = pack.adsRequired ?? 0;
+            return (
+              <article key={pack.id} className="shop-pack group rounded-3xl border border-border bg-card p-3 shadow-sm transition-transform hover:-translate-y-1">
+                <div className={cn("shop-art", `shop-art-${packIndex % 5}`)}>
+                  {PACK_ARTWORK[pack.id] ? (
+                    <img src={PACK_ARTWORK[pack.id]} alt={`${pack.name} AliGoal pack`} className="pack-artwork transition-transform group-hover:scale-[1.03]" />
+                  ) : (
+                    <><Sparkles className="absolute top-4 right-4 size-5 text-white/70" /><PackageOpen className="size-16 text-white/90 transition-transform group-hover:scale-110" strokeWidth={1.25} /></>
+                  )}
+                </div>
+                <div className="px-2 pb-2 pt-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h2 className="truncate text-3xl leading-none">{pack.name}</h2>
+                      <p className="mt-1 truncate text-sm text-muted-foreground">{pack.tagline} · {pack.players.length} cards</p>
+                    </div>
+                    <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 font-display text-sm text-primary">{pack.free ? "FREE" : `${required} ADS`}</span>
+                  </div>
+                  <div className="mt-5 flex items-center gap-2">
+                    <button type="button" onClick={() => unlocked ? togglePack(pack.id) : startAd(pack)} disabled={!unlocked && (!prerequisiteUnlocked || Boolean(watchingPackId))} className="flex-1 rounded-xl bg-primary py-3 font-display text-lg text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
+                      {unlocked ? (packIds.includes(pack.id) ? "SELECTED" : "USE IN GAME") : `EARN · ${watched}/${required}`}
+                    </button>
+                    <button type="button" onClick={() => setInspectedPackId(pack.id)} className="grid size-12 place-items-center rounded-xl border border-border bg-background text-primary transition-colors hover:bg-accent" aria-label={`Inspect ${pack.name}`} title="Inspect pack"><Eye className="size-5" /></button>
+                  </div>
+                  {!unlocked && !prerequisiteUnlocked && <p className="mt-2 text-xs text-muted-foreground">Unlock {prerequisite?.name} first.</p>}
+                </div>
+              </article>
+            );
+          })}
+        </div>
+        {watchingPackId && (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-background/85 px-6 backdrop-blur-sm">
+            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]"><p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p><h2 className="mt-3 text-4xl text-glow">WATCHING AD...</h2><p className="mt-3 text-sm text-muted-foreground">Unlocking {packs.find((pack) => pack.id === watchingPackId)?.name}</p><p className="mt-6 font-display text-7xl text-primary">{adSecondsRemaining}</p></div>
+          </div>
+        )}
+        {inspectedPack && (
+          <div className="fixed inset-0 z-50 overflow-y-auto bg-background/90 px-5 py-8 backdrop-blur-md sm:grid sm:place-items-center">
+            <section className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-5 shadow-2xl sm:p-8">
+              <div className="flex items-start justify-between gap-4"><div><p className="font-display text-sm tracking-[0.25em] text-primary">PACK PREVIEW</p><h2 className="mt-1 text-5xl leading-none">{inspectedPack.name}</h2><p className="mt-2 text-sm text-muted-foreground">{inspectedPack.tagline}</p></div><button type="button" onClick={() => setInspectedPackId(null)} className="grid size-10 place-items-center rounded-full border border-border" aria-label="Close pack inspection"><X className="size-5" /></button></div>
+              <div className="mt-6 grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
+                {inspectedPack.players.map((player) => <div key={`${inspectedPack.id}-${player.name}`} className="player-preview rounded-2xl border border-border p-3"><div className="flex items-center justify-between"><span className="font-display text-xs tracking-[0.2em] text-primary">PLAYER CARD</span><span className="rounded-md bg-primary/15 px-2 py-1 font-display text-sm text-primary">{player.position}</span></div><p className="mt-8 truncate font-display text-2xl">{player.name}</p><p className="truncate text-xs text-muted-foreground">{player.club}</p><p className="mt-1 text-xs">{player.flag} {player.nation}</p></div>)}
+              </div>
+            </section>
+          </div>
+        )}
+      </main>
+    );
+  }
+
   /* ---------------- TEAMS ---------------- */
   if (phase === "teams") {
     const startHold = (t: Team) => {
@@ -356,15 +506,18 @@ function Index() {
     };
 
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-7 px-5 pt-12 pb-10">
-        <header>
+      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-7 px-5 pt-6 pb-10">
+        <header className="flex items-start justify-between">
+          <div>
           <p className="font-display text-sm tracking-[0.35em] text-primary">MATCHDAY WORD GAME</p>
           <h1 className="mt-1 text-6xl leading-[0.9] text-glow">
             KICK OFF
             <br />
             ALIAS
           </h1>
+          </div>
         </header>
+        <button type="button" onClick={() => { setScreen("menu"); setPhase("setup"); }} className="flex w-fit items-center gap-2 text-sm text-muted-foreground"><ArrowLeft className="size-4" /> MAIN MENU</button>
 
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-2xl">
@@ -444,10 +597,10 @@ function Index() {
         </section>
 
         <button
-          onClick={() => setPhase("setup")}
+          onClick={() => setPhase("handoff")}
           className="mt-auto w-full rounded-2xl bg-primary py-5 font-display text-3xl text-primary-foreground shadow-[var(--shadow-glow)] transition-transform active:scale-[0.98]"
         >
-          NEXT · SETTINGS
+          NEXT · START GAME
         </button>
       </main>
     );
@@ -456,14 +609,17 @@ function Index() {
   /* ---------------- SETUP ---------------- */
   if (phase === "setup") {
     return (
-      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-7 px-5 pt-12 pb-10">
-        <header>
+      <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-7 px-5 pt-6 pb-10">
+        <header className="flex items-start justify-between">
+          <div>
           <p className="font-display text-sm tracking-[0.35em] text-primary">GAME SETTINGS</p>
           <h1 className="mt-1 text-5xl leading-[0.9] text-glow">SET THE RULES</h1>
           <p className="mt-2 text-sm text-muted-foreground">
             {teams.map((t) => t.name).join(" · ")}
           </p>
+          </div>
         </header>
+        <button type="button" onClick={() => setScreen("menu")} className="flex w-fit items-center gap-2 text-sm text-muted-foreground"><ArrowLeft className="size-4" /> MAIN MENU</button>
 
         <section>
           <h2 className="mb-3 flex items-center gap-2 text-2xl">
@@ -538,107 +694,44 @@ function Index() {
         </section>
 
         <section>
-          <h2 className="mb-3 text-2xl">Card packs</h2>
-          <div className="flex flex-col gap-2">
-            {packs.map((p) => {
-              const on = packIds.includes(p.id);
-              const unlocked = isPackUnlocked(p);
-              const prerequisite = p.requires ? packs.find((candidate) => candidate.id === p.requires) : null;
-              const prerequisiteUnlocked = !prerequisite || isPackUnlocked(prerequisite);
-              const watched = adsWatched[p.id] ?? 0;
-              const required = p.adsRequired ?? 0;
-              return (
-                <div
-                  key={p.id}
-                  className={cn(
-                    "rounded-2xl border border-border bg-card p-3 transition-all",
-                    on && "border-primary/70 shadow-[var(--shadow-glow)]",
-                    !unlocked && "border-muted-foreground/40 opacity-80",
-                  )}
-                >
-                  <button
-                    type="button"
-                    disabled={!unlocked}
-                    onClick={() => togglePack(p.id)}
-                    className={cn(
-                      "grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-3 px-1 text-left",
-                      unlocked ? "cursor-pointer" : "cursor-not-allowed",
-                    )}
-                  >
-                    <span className="min-w-0">
-                      <span className="block truncate font-display text-2xl">{p.name}</span>
-                      <span className="block truncate text-xs text-muted-foreground">
-                        {p.tagline} · {p.players.length} cards
-                      </span>
-                    </span>
-                    {unlocked ? (
-                      <span
-                        className={cn(
-                          "grid size-7 shrink-0 place-items-center rounded-full border",
-                          on
-                            ? "border-primary bg-primary text-primary-foreground"
-                            : "border-success/70 bg-success/15 text-success",
-                        )}
-                        aria-label={on ? "Selected" : "Unlocked"}
-                      >
-                        {on ? <Check className="size-4" strokeWidth={3} /> : <CheckCircle2 className="size-4" />}
-                      </span>
-                    ) : (
-                      <LockKeyhole className="size-5 shrink-0 text-muted-foreground" aria-label="Locked" />
-                    )}
-                  </button>
-
-                  {!unlocked && (
-                    <div className="mt-3 border-t border-border pt-3">
-                      {prerequisiteUnlocked ? (
-                        <button
-                          type="button"
-                          onClick={() => startAd(p)}
-                          disabled={Boolean(watchingPackId)}
-                          className="w-full rounded-xl bg-primary py-2 font-display text-base text-primary-foreground disabled:cursor-wait disabled:opacity-60"
-                        >
-                          WATCH AD TO UNLOCK ({watched}/{required} WATCHED)
-                        </button>
-                      ) : (
-                        <p className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <LockKeyhole className="size-3" /> Unlock {prerequisite?.name} first
-                        </p>
-                      )}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+          <div className="mb-3 flex items-end justify-between gap-3">
+            <div>
+              <h2 className="text-2xl">Owned packs</h2>
+              <p className="mt-1 text-xs text-muted-foreground">Choose the leagues in your next player pool.</p>
+            </div>
+            <span className="font-display text-sm text-primary">{packIds.length} SELECTED</span>
           </div>
+          {ownedLeaguePacks.length > 0 ? (
+            <div className="grid gap-2">
+              {ownedLeaguePacks.map((pack) => {
+                const selected = packIds.includes(pack.id);
+                return (
+                  <button key={pack.id} type="button" onClick={() => togglePack(pack.id)} className={cn("flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left transition-all", selected && "border-primary bg-primary/10 shadow-[var(--shadow-glow)]")}>
+                    <span className="min-w-0"><span className="block truncate font-display text-xl">{pack.name}</span><span className="block truncate text-xs text-muted-foreground">{pack.tagline} · {pack.players.length} cards</span></span>
+                    <span className={cn("grid size-7 shrink-0 place-items-center rounded-full border", selected ? "border-primary bg-primary text-primary-foreground" : "border-border text-muted-foreground")}>{selected && <Check className="size-4" strokeWidth={3} />}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">No league packs owned yet. Visit Packs to get one.</p>
+          )}
         </section>
 
         <div className="mt-auto grid gap-2">
           <button
-            onClick={() => setPhase("handoff")}
+            onClick={() => setPhase("teams")}
             className="w-full rounded-2xl bg-primary py-5 font-display text-3xl text-primary-foreground shadow-[var(--shadow-glow)] transition-transform active:scale-[0.98]"
           >
-            KICK OFF · {pool.length} CARDS
+            NEXT · TEAM NAMING
           </button>
           <button
-            onClick={() => setPhase("teams")}
+            onClick={() => setScreen("menu")}
             className="w-full rounded-2xl border border-border bg-card py-3 font-display text-xl"
           >
-            BACK TO TEAMS
+            BACK TO MENU
           </button>
         </div>
-
-        {watchingPackId && (
-          <div className="fixed inset-0 z-50 grid place-items-center bg-background/85 px-6 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]">
-              <p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p>
-              <h2 className="mt-3 text-4xl text-glow">WATCHING AD...</h2>
-              <p className="mt-3 text-sm text-muted-foreground">
-                Unlocking {packs.find((pack) => pack.id === watchingPackId)?.name}
-              </p>
-              <p className="mt-6 font-display text-7xl text-primary">{adSecondsRemaining}</p>
-            </div>
-          </div>
-        )}
       </main>
     );
   }

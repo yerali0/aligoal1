@@ -80,6 +80,26 @@
   --shadow-glow: 0 0 40px -8px oklch(0.85 0.15 90 / 45%);
 }
 
+.light {
+  --background: oklch(0.97 0.012 95);
+  --foreground: oklch(0.2 0.025 255);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.025 255);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.025 255);
+  --secondary: oklch(0.93 0.018 100);
+  --secondary-foreground: oklch(0.22 0.025 255);
+  --muted: oklch(0.93 0.018 100);
+  --muted-foreground: oklch(0.45 0.025 255);
+  --accent: oklch(0.91 0.025 155);
+  --accent-foreground: oklch(0.2 0.025 255);
+  --border: oklch(0.2 0.025 255 / 14%);
+  --input: oklch(0.2 0.025 255 / 16%);
+  --gradient-pitch: radial-gradient(100% 55% at 50% 0%, oklch(0.92 0.06 150 / 45%) 0%, transparent 70%), linear-gradient(180deg, oklch(0.98 0.01 95) 0%, oklch(0.93 0.025 150) 100%);
+  --shadow-card: 0 24px 50px -28px oklch(0.2 0.03 255 / 35%), 0 0 0 1px oklch(0.7 0.08 90 / 25%);
+  --shadow-glow: 0 0 35px -10px oklch(0.65 0.14 80 / 45%);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -100,6 +120,57 @@
     letter-spacing: 0.02em;
   }
 }
+
+@utility menu-shell {
+  background: radial-gradient(80% 55% at 85% 10%, oklch(0.34 0.09 160 / 30%), transparent 65%), var(--gradient-pitch);
+}
+
+@utility menu-tile {
+  min-height: 310px;
+  border: 1px solid oklch(1 0 0 / 16%);
+  border-radius: 1.5rem;
+  padding: 1.5rem;
+  color: white;
+  box-shadow: 0 24px 60px -30px oklch(0 0 0 / 80%);
+  transition: transform 220ms ease, border-color 220ms ease;
+}
+
+@utility menu-tile-play {
+  background: linear-gradient(140deg, oklch(0.27 0.08 165), oklch(0.12 0.03 250));
+}
+
+@utility menu-tile-packs {
+  background: linear-gradient(140deg, oklch(0.38 0.12 72), oklch(0.16 0.04 28));
+}
+
+@utility shop-art {
+  position: relative;
+  display: grid;
+  aspect-ratio: 2 / 3;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 1.25rem;
+  background: linear-gradient(145deg, oklch(0.28 0.1 165), oklch(0.12 0.04 250));
+}
+
+@utility shop-art-1 { background: linear-gradient(145deg, oklch(0.3 0.11 235), oklch(0.12 0.04 275)); }
+@utility shop-art-2 { background: linear-gradient(145deg, oklch(0.48 0.15 70), oklch(0.2 0.07 35)); }
+@utility shop-art-3 { background: linear-gradient(145deg, oklch(0.32 0.12 320), oklch(0.14 0.05 275)); }
+@utility shop-art-4 { background: linear-gradient(145deg, oklch(0.35 0.15 145), oklch(0.12 0.04 170)); }
+
+@utility pack-artwork {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: drop-shadow(0 14px 20px oklch(0 0 0 / 35%));
+}
+
+@utility player-preview {
+  background: linear-gradient(145deg, oklch(0.25 0.03 255), oklch(0.16 0.025 255));
+}
+
+.light .player-preview { background: linear-gradient(145deg, oklch(0.98 0.02 95), oklch(0.9 0.035 150)); }
 
 @utility fc-card {
   background: var(--gradient-card);
