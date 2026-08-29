@@ -49,12 +49,12 @@ export const Route = createFileRoute("/")({
 const TIMES = [30, 60, 90, 120];
 const TARGETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 const SKINS = [
-  { cls: "fc-skin-gold", label: "BASE ICON" },
-  { cls: "fc-skin-toty", label: "TOTY" },
-  { cls: "fc-skin-totw", label: "TOTW" },
-  { cls: "fc-skin-fof", label: "FANTASY FC" },
-  { cls: "fc-skin-futties", label: "FUTTIES" },
-  { cls: "fc-skin-radioactive", label: "RADIOACTIVE" },
+  { label: "BASE ICON", artwork: "/cards/card-01.svg" },
+  { label: "TOTY", artwork: "/cards/card-02.svg" },
+  { label: "TOTW", artwork: "/cards/card-03.svg" },
+  { label: "FANTASY FC", artwork: "/cards/card-04.svg" },
+  { label: "FUTTIES", artwork: "/cards/card-05.svg" },
+  { label: "RADIOACTIVE", artwork: "/cards/card-06.svg" },
 ];
 
 const CLUB_NAMES = [
@@ -91,17 +91,17 @@ type Screen = "menu" | "game" | "packs";
 
 const PACK_UNLOCK_STORAGE_KEY = "kick-off-alias-pack-unlocks";
 const PACK_ARTWORK: Record<string, string> = {
+  top5: "/packs/top5.svg",
   premier: "/packs/premier-league.svg",
   laliga: "/packs/laliga.svg",
   seriea: "/packs/serie-a.svg",
   bundesliga: "/packs/bundesliga.svg",
   ligue1: "/packs/ligue-1.svg",
-  mls: "/packs/mls.svg",
+  mls: "/packs/MLS.svg",
+  womens: "/packs/womens.svg",
   legends2000s: "/packs/legends-2000s.svg",
   worldcup: "/packs/world-cup.svg",
 };
-const NON_LEAGUE_PACK_IDS = new Set(["top5", "womens", "legends2000s", "worldcup"]);
-
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -213,7 +213,7 @@ function Index() {
   const [exiting, setExiting] = useState<"up" | "down" | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const exitRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [skinSeed, setSkinSeed] = useState(0);
+  const [skinOrder, setSkinOrder] = useState<number[]>([]);
 
   useEffect(
     () => () => {
@@ -277,7 +277,7 @@ function Index() {
       setResults([]);
       setLeft(seconds);
       setExiting(null);
-      setSkinSeed(Math.floor(Math.random() * 1000));
+      setSkinOrder(shuffle(SKINS.map((_, skinIndex) => skinIndex)));
       setPhase("playing");
     } catch (err) {
       console.error(err);
@@ -334,14 +334,17 @@ function Index() {
     (pack: (typeof packs)[number]): boolean => {
       let currentPack: (typeof packs)[number] | undefined = pack;
 
-      while (currentPack) {
+      while (true) {
+        if (!currentPack) break;
+        const packToCheck: (typeof packs)[number] = currentPack;
         const ownUnlockComplete =
-          currentPack.free ||
-          !currentPack.adsRequired ||
-          (adsWatched[currentPack.id] ?? 0) >= currentPack.adsRequired;
+          packToCheck.free ||
+          !packToCheck.adsRequired ||
+          (adsWatched[packToCheck.id] ?? 0) >= packToCheck.adsRequired;
         if (!ownUnlockComplete) return false;
-        currentPack = currentPack.requires
-          ? packs.find((candidate) => candidate.id === currentPack.requires)
+        const requiredPackId: string | undefined = packToCheck.requires;
+        currentPack = requiredPackId
+          ? packs.find((candidate) => candidate.id === requiredPackId)
           : undefined;
       }
 
@@ -365,9 +368,7 @@ function Index() {
     setWatchingPackId(pack.id);
   };
 
-  const ownedLeaguePacks = packs.filter(
-    (pack) => !NON_LEAGUE_PACK_IDS.has(pack.id) && isPackUnlocked(pack),
-  );
+  const ownedPacks = packs.filter((pack) => isPackUnlocked(pack));
 
   const ThemeToggle = () => (
     <button
@@ -454,8 +455,8 @@ function Index() {
                     <span className="shrink-0 rounded-full bg-primary/15 px-2 py-1 font-display text-sm text-primary">{pack.free ? "FREE" : `${required} ADS`}</span>
                   </div>
                   <div className="mt-5 flex items-center gap-2">
-                    <button type="button" onClick={() => unlocked ? togglePack(pack.id) : startAd(pack)} disabled={!unlocked && (!prerequisiteUnlocked || Boolean(watchingPackId))} className="flex-1 rounded-xl bg-primary py-3 font-display text-lg text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
-                      {unlocked ? (packIds.includes(pack.id) ? "SELECTED" : "USE IN GAME") : `EARN · ${watched}/${required}`}
+                    <button type="button" onClick={() => unlocked ? undefined : startAd(pack)} disabled={unlocked || (!prerequisiteUnlocked || Boolean(watchingPackId))} className="flex-1 rounded-xl bg-primary py-3 font-display text-lg text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
+                      {unlocked ? "OWNED" : `EARN · ${watched}/${required}`}
                     </button>
                     <button type="button" onClick={() => setInspectedPackId(pack.id)} className="grid size-12 place-items-center rounded-xl border border-border bg-background text-primary transition-colors hover:bg-accent" aria-label={`Inspect ${pack.name}`} title="Inspect pack"><Eye className="size-5" /></button>
                   </div>
@@ -475,7 +476,11 @@ function Index() {
             <section className="mx-auto w-full max-w-3xl rounded-3xl border border-border bg-card p-5 shadow-2xl sm:p-8">
               <div className="flex items-start justify-between gap-4"><div><p className="font-display text-sm tracking-[0.25em] text-primary">PACK PREVIEW</p><h2 className="mt-1 text-5xl leading-none">{inspectedPack.name}</h2><p className="mt-2 text-sm text-muted-foreground">{inspectedPack.tagline}</p></div><button type="button" onClick={() => setInspectedPackId(null)} className="grid size-10 place-items-center rounded-full border border-border" aria-label="Close pack inspection"><X className="size-5" /></button></div>
               <div className="mt-6 grid max-h-[60vh] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3">
-                {inspectedPack.players.map((player) => <div key={`${inspectedPack.id}-${player.name}`} className="player-preview rounded-2xl border border-border p-3"><div className="flex items-center justify-between"><span className="font-display text-xs tracking-[0.2em] text-primary">PLAYER CARD</span><span className="rounded-md bg-primary/15 px-2 py-1 font-display text-sm text-primary">{player.position}</span></div><p className="mt-8 truncate font-display text-2xl">{player.name}</p><p className="truncate text-xs text-muted-foreground">{player.club}</p><p className="mt-1 text-xs">{player.flag} {player.nation}</p></div>)}
+                {inspectedPack.players.map((player, playerIndex) => playerIndex < 3 ? (
+                  <div key={`${inspectedPack.id}-${player.name}`} className="player-preview rounded-2xl border border-border p-3"><div className="flex items-center justify-between"><span className="font-display text-xs tracking-[0.2em] text-primary">PLAYER CARD</span><span className="rounded-md bg-primary/15 px-2 py-1 font-display text-sm text-primary">{player.position}</span></div><p className="mt-8 truncate font-display text-2xl">{player.name}</p><p className="truncate text-xs text-muted-foreground">{player.club}</p><p className="mt-1 text-xs">{player.flag} {player.nation}</p></div>
+                ) : (
+                  <div key={`${inspectedPack.id}-hidden-${playerIndex}`} className="player-preview player-preview-hidden rounded-2xl border border-border p-3" aria-label="Hidden player card"><span className="font-display text-xs tracking-[0.2em] text-white/60">PLAYER CARD</span><span className="mt-10 block text-center font-display text-2xl text-white/70">HIDDEN</span></div>
+                ))}
               </div>
             </section>
           </div>
@@ -701,9 +706,9 @@ function Index() {
             </div>
             <span className="font-display text-sm text-primary">{packIds.length} SELECTED</span>
           </div>
-          {ownedLeaguePacks.length > 0 ? (
+          {ownedPacks.length > 0 ? (
             <div className="grid gap-2">
-              {ownedLeaguePacks.map((pack) => {
+              {ownedPacks.map((pack) => {
                 const selected = packIds.includes(pack.id);
                 return (
                   <button key={pack.id} type="button" onClick={() => togglePack(pack.id)} className={cn("flex items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3 text-left transition-all", selected && "border-primary bg-primary/10 shadow-[var(--shadow-glow)]")}>
@@ -783,7 +788,7 @@ function Index() {
     const player = deck[index % deck.length];
     if (!player) return null;
     const urgent = left <= 10;
-    const skin = SKINS[(index + skinSeed) % SKINS.length]!;
+    const skin = SKINS[(skinOrder[index % skinOrder.length] ?? 0)]!;
     return (
       <main className="mx-auto flex min-h-screen w-full max-w-md flex-col gap-5 px-5 pt-8 pb-8">
         <div className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3">
@@ -816,7 +821,6 @@ function Index() {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           style={{
-            boxShadow: "var(--shadow-card)",
             ...(exiting
               ? {
                   transform: `translateY(${exiting === "up" ? -1400 : 1400}px) rotate(${exiting === "up" ? -6 : 6}deg) scale(0.92)`,
@@ -829,57 +833,54 @@ function Index() {
                   transition: dragStart.current === null ? "transform 200ms ease-out" : "none",
                 }),
           }}
-          className={cn(
-            skin.cls,
-            "relative flex flex-1 touch-none flex-col items-center justify-center rounded-3xl px-6 py-10 text-center select-none",
-          )}
+          className="relative flex aspect-[2/3] w-full touch-none flex-col items-center justify-center text-center select-none"
         >
-          <span className="absolute top-3 left-4 font-display text-[0.6rem] tracking-[0.3em] opacity-70">
-            {skin.label}
-          </span>
-          <span
-            className={cn(
-              "absolute top-4 left-1/2 -translate-x-1/2 rounded-full bg-success px-4 py-1 font-display text-xl text-success-foreground transition-opacity",
-              drag < -40 ? "opacity-100" : "opacity-0",
-            )}
-          >
-            GOT IT
-          </span>
-          <span
-            className={cn(
-              "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-destructive px-4 py-1 font-display text-xl text-destructive-foreground transition-opacity",
-              drag > 40 ? "opacity-100" : "opacity-0",
-            )}
-          >
-            SKIP
-          </span>
+          <img src={skin.artwork} alt="" aria-hidden="true" className="absolute inset-0 z-0 size-full object-contain" />
+          <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center px-6 py-10 text-slate-900">
+            <span
+              className={cn(
+                "absolute top-1 left-1/2 -translate-x-1/2 rounded-full bg-success px-4 py-1 font-display text-xl text-success-foreground transition-opacity",
+                drag < -40 ? "opacity-100" : "opacity-0",
+              )}
+            >
+              GOT IT
+            </span>
+            <span
+              className={cn(
+                "absolute bottom-1 left-1/2 -translate-x-1/2 rounded-full bg-destructive px-4 py-1 font-display text-xl text-destructive-foreground transition-opacity",
+                drag > 40 ? "opacity-100" : "opacity-0",
+              )}
+            >
+              SKIP
+            </span>
 
-          <div className="w-full">
-            <p className="font-display text-xs tracking-[0.4em] opacity-60">EXPLAIN THIS PLAYER</p>
-            <h2 className="mt-2 text-[clamp(2.25rem,11vw,3.5rem)] leading-[0.95] font-black uppercase">
-              {player.name}
-            </h2>
+            <div className="w-full">
+              <p className="font-display text-xs tracking-[0.4em] text-slate-700 opacity-80">EXPLAIN THIS PLAYER</p>
+              <h2 className="mt-2 text-[clamp(2.25rem,11vw,3.5rem)] leading-[0.95] font-black uppercase text-slate-950">
+                {player.name}
+              </h2>
+            </div>
+
+            <div className="my-8 h-px w-24 bg-slate-900/25" />
+
+            <dl className="grid w-full grid-cols-3 gap-3 text-slate-900">
+              <div>
+                <dt className="font-display text-[0.65rem] tracking-widest text-slate-700 opacity-80">POS</dt>
+                <dd className="font-display text-3xl text-slate-900">{player.position}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-display text-[0.65rem] tracking-widest text-slate-700 opacity-80">CLUB</dt>
+                <dd className="text-sm leading-tight font-bold text-slate-900">{player.club}</dd>
+              </div>
+              <div className="min-w-0">
+                <dt className="font-display text-[0.65rem] tracking-widest text-slate-700 opacity-80">NATION</dt>
+                <dd className="text-sm leading-tight font-bold text-slate-900">
+                  <span className="mr-1">{player.flag}</span>
+                  {player.nation}
+                </dd>
+              </div>
+            </dl>
           </div>
-
-          <div className="my-8 h-px w-24 bg-current opacity-25" />
-
-          <dl className="grid w-full grid-cols-3 gap-3">
-            <div>
-              <dt className="font-display text-[0.65rem] tracking-widest opacity-60">POS</dt>
-              <dd className="font-display text-3xl">{player.position}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="font-display text-[0.65rem] tracking-widest opacity-60">CLUB</dt>
-              <dd className="text-sm leading-tight font-bold">{player.club}</dd>
-            </div>
-            <div className="min-w-0">
-              <dt className="font-display text-[0.65rem] tracking-widest opacity-60">NATION</dt>
-              <dd className="text-sm leading-tight font-bold">
-                <span className="mr-1">{player.flag}</span>
-                {player.nation}
-              </dd>
-            </div>
-          </dl>
         </div>
 
         <div className="grid grid-cols-2 gap-3 text-center font-display text-lg">
