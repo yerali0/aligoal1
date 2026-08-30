@@ -28,9 +28,11 @@ jobs:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: Add Android Platform & Sync
+      - name: Capacitor Sync Android
         run: |
-          npx cap add android || true
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
           npx cap sync android
 
       - name: Build Debug APK with Gradle
