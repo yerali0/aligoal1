@@ -1,66 +1,46 @@
-let audioContext: AudioContext | null = null;
+const SOUND_FILES = {
+  correct: "/sounds/correct.mp3",
+  skip: "/sounds/skip.mp3",
+  finish: "/sounds/finish.mp3",
+} as const;
 
-function getAudioContext() {
+const audioCache = new Map<string, HTMLAudioElement>();
+
+function getAudio(src: string) {
   if (typeof window === "undefined") return null;
-  if (!audioContext) {
-    const AudioContextConstructor = window.AudioContext;
-    if (!AudioContextConstructor) return null;
-    audioContext = new AudioContextConstructor();
+  let audio = audioCache.get(src);
+  if (!audio) {
+    audio = new Audio(src);
+    audio.preload = "auto";
+    audioCache.set(src, audio);
   }
-  return audioContext;
+  return audio;
 }
 
-function tone(
-  frequency: number,
-  duration: number,
-  startTime: number,
-  type: OscillatorType,
-  volume: number,
-  endFrequency = frequency,
-) {
-  const context = getAudioContext();
-  if (!context) return;
-
-  const oscillator = context.createOscillator();
-  const gain = context.createGain();
-  oscillator.type = type;
-  oscillator.frequency.setValueAtTime(frequency, startTime);
-  oscillator.frequency.linearRampToValueAtTime(endFrequency, startTime + duration);
-  gain.gain.setValueAtTime(0.0001, startTime);
-  gain.gain.exponentialRampToValueAtTime(volume, startTime + 0.01);
-  gain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-  oscillator.connect(gain).connect(context.destination);
-  oscillator.start(startTime);
-  oscillator.stop(startTime + duration);
-}
-
-function schedule(effect: (context: AudioContext, startTime: number) => void) {
-  const context = getAudioContext();
-  if (!context) return;
-  void context.resume().then(() => effect(context, context.currentTime));
+function playFile(src: string) {
+  const audio = getAudio(src);
+  if (!audio) return;
+  audio.currentTime = 0;
+  void audio.play().catch(() => {
+  });
 }
 
 export function playCorrect() {
-  schedule((_, startTime) => {
-    tone(660, 0.1, startTime, "triangle", 0.12, 740);
-    tone(880, 0.16, startTime + 0.08, "triangle", 0.14, 988);
-  });
+  playFile(SOUND_FILES.correct);
 }
 
 export function playSkip() {
-  schedule((_, startTime) => {
-    tone(220, 0.18, startTime, "sawtooth", 0.08, 150);
-  });
+  playFile(SOUND_FILES.skip);
 }
 
 export function playWhistle() {
-  schedule((_, startTime) => {
-    tone(1200, 0.28, startTime, "sine", 0.1, 1750);
-    tone(1750, 0.45, startTime + 0.22, "sine", 0.1, 1050);
-  });
+  playFile(SOUND_FILES.finish);
+}
+
+export function preloadSounds() {
+  Object.values(SOUND_FILES).forEach((src) => getAudio(src)?.load());
 }
 
 export function primeAudio() {
-  const context = getAudioContext();
-  if (context) void context.resume();
+  preloadSounds();
 }

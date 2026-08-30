@@ -22,7 +22,7 @@ import {
 import { PACKS, type Player } from "@/data/players";
 import { fetchPacks } from "@/lib/packs";
 import { cn } from "@/lib/utils";
-import { playCorrect, playSkip, playWhistle, primeAudio } from "@/lib/sfx";
+import { playCorrect, playSkip, playWhistle, preloadSounds, primeAudio } from "@/lib/sfx";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -102,6 +102,14 @@ const PACK_ARTWORK: Record<string, string> = {
   legends2000s: "/packs/legends-2000s.svg",
   worldcup: "/packs/world-cup.svg",
 };
+
+function preloadImages(sources: string[]) {
+  sources.forEach((source) => {
+    const image = new Image();
+    image.src = source;
+  });
+}
+
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -131,6 +139,14 @@ function Index() {
   const [unlockProgressLoaded, setUnlockProgressLoaded] = useState(false);
   const [watchingPackId, setWatchingPackId] = useState<string | null>(null);
   const [adSecondsRemaining, setAdSecondsRemaining] = useState(3);
+
+  useEffect(() => {
+    preloadSounds();
+    preloadImages([
+      ...SKINS.map((skin) => skin.artwork),
+      ...Object.values(PACK_ARTWORK),
+    ]);
+  }, []);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("aligoal-theme");
