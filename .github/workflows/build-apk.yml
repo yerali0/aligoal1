@@ -19,19 +19,8 @@ jobs:
       - name: Install Dependencies
         run: npm install
 
-      - name: Build Web App
-        run: npm run build
-
-      - name: Locate Output Directory
-        run: |
-          if [ -f ".output/public/index.html" ]; then
-            echo "Found index.html in .output/public"
-          elif [ -f ".output/index.html" ]; then
-            echo "Found index.html in .output"
-          else
-            echo "::error::Could not find index.html in .output"
-            exit 1
-          fi
+      - name: Build Web App with Vite
+        run: npx vite build
 
       - name: Setup Java JDK
         uses: actions/setup-java@v4

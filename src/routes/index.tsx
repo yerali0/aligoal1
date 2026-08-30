@@ -1,5 +1,3 @@
-import { AdMob, RewardAdPluginEvents, type AdMobRewardItem } from "@capacitor-community/admob";
-import { Capacitor } from "@capacitor/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -24,7 +22,7 @@ import {
 import { PACKS, type Player } from "@/data/players";
 import { fetchPacks } from "@/lib/packs";
 import { cn } from "@/lib/utils";
-import { playCorrect, playSkip, playWhistle, preloadSounds, primeAudio } from "@/lib/sfx";
+import { playCorrect, playSkip, playWhistle, primeAudio } from "@/lib/sfx";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -51,12 +49,12 @@ export const Route = createFileRoute("/")({
 const TIMES = [30, 60, 90, 120];
 const TARGETS = [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120];
 const SKINS = [
-  { label: "BASE ICON", artwork: "/cards/card-01.svg" },
-  { label: "TOTY", artwork: "/cards/card-02.svg" },
-  { label: "TOTW", artwork: "/cards/card-03.svg" },
-  { label: "FANTASY FC", artwork: "/cards/card-04.svg" },
-  { label: "FUTTIES", artwork: "/cards/card-05.svg" },
-  { label: "RADIOACTIVE", artwork: "/cards/card-06.svg" },
+  { cls: "fc-skin-gold", label: "BASE ICON", artwork: "/cards/card-01.svg" },
+  { cls: "fc-skin-toty", label: "TOTY", artwork: "/cards/card-02.svg" },
+  { cls: "fc-skin-totw", label: "TOTW", artwork: "/cards/card-03.svg" },
+  { cls: "fc-skin-fof", label: "FANTASY FC", artwork: "/cards/card-04.svg" },
+  { cls: "fc-skin-futties", label: "FUTTIES", artwork: "/cards/card-05.svg" },
+  { cls: "fc-skin-radioactive", label: "RADIOACTIVE", artwork: "/cards/card-06.svg" },
 ];
 
 const CLUB_NAMES = [
@@ -92,7 +90,6 @@ type Team = { id: number; name: string; score: number };
 type Screen = "menu" | "game" | "packs";
 
 const PACK_UNLOCK_STORAGE_KEY = "kick-off-alias-pack-unlocks";
-const PACK_UNLOCK_AD_ID = "ca-app-pub-3940256099942544/5224354917";
 const PACK_ARTWORK: Record<string, string> = {
   top5: "/packs/top5.svg",
   premier: "/packs/premier-league.svg",
@@ -100,19 +97,11 @@ const PACK_ARTWORK: Record<string, string> = {
   seriea: "/packs/serie-a.svg",
   bundesliga: "/packs/bundesliga.svg",
   ligue1: "/packs/ligue-1.svg",
-  mls: "/packs/mls.svg",
+  mls: "/packs/MLS.svg",
   womens: "/packs/womens.svg",
   legends2000s: "/packs/legends-2000s.svg",
   worldcup: "/packs/world-cup.svg",
 };
-
-function preloadImages(sources: string[]) {
-  sources.forEach((source) => {
-    const image = new Image();
-    image.src = source;
-  });
-}
-
 function shuffle<T>(arr: T[]): T[] {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -141,16 +130,7 @@ function Index() {
   const [adsWatched, setAdsWatched] = useState<Record<string, number>>({});
   const [unlockProgressLoaded, setUnlockProgressLoaded] = useState(false);
   const [watchingPackId, setWatchingPackId] = useState<string | null>(null);
-  const [adMode, setAdMode] = useState<"simulate" | null>(null);
   const [adSecondsRemaining, setAdSecondsRemaining] = useState(3);
-
-  useEffect(() => {
-    preloadSounds();
-    preloadImages([
-      ...SKINS.map((skin) => skin.artwork),
-      ...Object.values(PACK_ARTWORK),
-    ]);
-  }, []);
 
   useEffect(() => {
     const savedTheme = window.localStorage.getItem("aligoal-theme");
@@ -199,7 +179,7 @@ function Index() {
   }, [adsWatched, unlockProgressLoaded]);
 
   useEffect(() => {
-    if (!watchingPackId || adMode !== "simulate") return;
+    if (!watchingPackId) return;
 
     setAdSecondsRemaining(3);
     const countdown = window.setInterval(() => {
@@ -208,37 +188,19 @@ function Index() {
     const finishAd = window.setTimeout(() => {
       const pack = packs.find((item) => item.id === watchingPackId);
       if (pack?.adsRequired) {
-        setAdsWatched((watched) => {
-          const nextWatched = {
-            ...watched,
-            [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
-          };
-          try {
-            window.localStorage.setItem(PACK_UNLOCK_STORAGE_KEY, JSON.stringify(nextWatched));
-          } catch {
-            // Ignore localStorage write failures and keep the app playable.
-          }
-          return nextWatched;
-        });
+        setAdsWatched((watched) => ({
+          ...watched,
+          [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
+        }));
       }
       setWatchingPackId(null);
-      setAdMode(null);
-      setAdSecondsRemaining(3);
     }, 3000);
 
     return () => {
       window.clearInterval(countdown);
       window.clearTimeout(finishAd);
     };
-  }, [adMode, packs, watchingPackId]);
-
-  useEffect(() => {
-    if (Capacitor.isNativePlatform()) {
-      void AdMob.initialize().catch((error) => {
-        console.warn("AdMob initialization failed:", error);
-      });
-    }
-  }, []);
+  }, [packs, watchingPackId]);
   const [turn, setTurn] = useState(0);
   const [editingId, setEditingId] = useState<number | null>(null);
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -399,67 +361,11 @@ function Index() {
     );
   };
 
-  const grantPackReward = useCallback(
-    (packId: string) => {
-      const pack = packs.find((item) => item.id === packId);
-      if (!pack?.adsRequired) return;
-
-      setAdsWatched((watched) => {
-        const nextWatched = {
-          ...watched,
-          [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
-        };
-        try {
-          window.localStorage.setItem(PACK_UNLOCK_STORAGE_KEY, JSON.stringify(nextWatched));
-        } catch {
-          // Ignore localStorage write failures and keep the app playable.
-        }
-        return nextWatched;
-      });
-    },
-    [packs],
-  );
-
-  const showPackUnlockAd = useCallback(
-    async (pack: (typeof packs)[number]) => {
-      if (!pack.adsRequired || watchingPackId || isPackUnlocked(pack)) return;
-      const prerequisite = pack.requires ? packs.find((candidate) => candidate.id === pack.requires) : null;
-      if (prerequisite && !isPackUnlocked(prerequisite)) return;
-
-      if (!Capacitor.isNativePlatform()) {
-        setWatchingPackId(pack.id);
-        setAdMode("simulate");
-        return;
-      }
-
-      setWatchingPackId(pack.id);
-      setAdMode(null);
-
-      let rewardListener: Awaited<ReturnType<typeof AdMob.addListener>> | null = null;
-
-      try {
-        rewardListener = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward: AdMobRewardItem) => {
-          void rewardListener?.remove();
-          console.log("Pack unlock reward granted", reward);
-          grantPackReward(pack.id);
-          setWatchingPackId(null);
-          setAdMode(null);
-        });
-
-        await AdMob.prepareRewardVideoAd({ adId: PACK_UNLOCK_AD_ID });
-        await AdMob.showRewardVideoAd();
-      } catch (error) {
-        console.warn("Pack unlock rewarded ad failed, falling back to simulated ad:", error);
-        void rewardListener?.remove();
-        setWatchingPackId(pack.id);
-        setAdMode("simulate");
-      }
-    },
-    [grantPackReward, isPackUnlocked, watchingPackId],
-  );
-
   const startAd = (pack: (typeof packs)[number]) => {
-    void showPackUnlockAd(pack);
+    if (!pack.adsRequired || watchingPackId || isPackUnlocked(pack)) return;
+    const prerequisite = pack.requires ? packs.find((candidate) => candidate.id === pack.requires) : null;
+    if (prerequisite && !isPackUnlocked(prerequisite)) return;
+    setWatchingPackId(pack.id);
   };
 
   const ownedPacks = packs.filter((pack) => isPackUnlocked(pack));
@@ -482,7 +388,7 @@ function Index() {
         <header className="flex items-start justify-between">
           <div>
             <p className="font-display text-sm tracking-[0.35em] text-primary">AliGoal</p>
-            <h1 className="mt-3 max-w-xl text-7xl leading-[0.82] text-glow sm:text-9xl">GUESS THE FOOTBALL STARS</h1>
+            <h1 className="mt-3 max-w-xl text-7xl leading-[0.82] text-glow sm:text-9xl">PLAY THE BEAUTIFUL GAME</h1>
           </div>
           <ThemeToggle />
         </header>
@@ -494,7 +400,7 @@ function Index() {
           >
             <span className="flex items-center gap-3 text-primary"><Play className="size-5 fill-current" /> MAIN MATCH</span>
             <span className="mt-10 block font-display text-6xl leading-none sm:text-8xl">PLAY</span>
-            <span className="mt-3 block max-w-xs text-sm text-white/65">Test your football IQ, set your timer, and swipe through cards!</span>
+            <span className="mt-3 block max-w-xs text-sm text-white/65">Set the rules, name your teams, and race to the final whistle.</span>
             <span className="mt-8 flex items-center gap-2 font-display text-xl text-primary">ENTER GAME <ArrowLeft className="size-5 rotate-180 transition-transform group-hover:translate-x-1" /></span>
           </button>
           <button
@@ -504,7 +410,7 @@ function Index() {
           >
             <span className="flex items-center gap-3 text-primary"><ShoppingBag className="size-5" /> PACK SHOP</span>
             <span className="mt-10 block font-display text-6xl leading-none sm:text-8xl">PACKS</span>
-            <span className="mt-3 block text-sm text-white/65">Unlock new card packs, leagues, and football icons!</span>
+            <span className="mt-3 block text-sm text-white/65">Build your player pool with leagues from around the world.</span>
             <span className="mt-8 flex items-center gap-2 font-display text-xl text-primary">BROWSE PACKS <ArrowLeft className="size-5 rotate-180 transition-transform group-hover:translate-x-1" /></span>
           </button>
         </section>
@@ -550,11 +456,7 @@ function Index() {
                   </div>
                   <div className="mt-5 flex items-center gap-2">
                     <button type="button" onClick={() => unlocked ? undefined : startAd(pack)} disabled={unlocked || (!prerequisiteUnlocked || Boolean(watchingPackId))} className="flex-1 rounded-xl bg-primary py-3 font-display text-lg text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
-                      {unlocked
-                        ? "OWNED"
-                        : watchingPackId === pack.id
-                          ? `WATCHING ${adSecondsRemaining}s`
-                          : `WATCH AD · ${watched}/${required}`}
+                      {unlocked ? "OWNED" : `EARN · ${watched}/${required}`}
                     </button>
                     <button type="button" onClick={() => setInspectedPackId(pack.id)} className="grid size-12 place-items-center rounded-xl border border-border bg-background text-primary transition-colors hover:bg-accent" aria-label={`Inspect ${pack.name}`} title="Inspect pack"><Eye className="size-5" /></button>
                   </div>
@@ -564,14 +466,9 @@ function Index() {
             );
           })}
         </div>
-        {watchingPackId && adMode === "simulate" && (
+        {watchingPackId && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-background/85 px-6 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]">
-              <p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p>
-              <h2 className="mt-3 text-4xl text-glow">WATCH AD</h2>
-              <p className="mt-3 text-sm text-muted-foreground">Unlocking {packs.find((pack) => pack.id === watchingPackId)?.name}</p>
-              <p className="mt-6 font-display text-7xl text-primary">{adSecondsRemaining}</p>
-            </div>
+            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]"><p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p><h2 className="mt-3 text-4xl text-glow">WATCHING AD...</h2><p className="mt-3 text-sm text-muted-foreground">Unlocking {packs.find((pack) => pack.id === watchingPackId)?.name}</p><p className="mt-6 font-display text-7xl text-primary">{adSecondsRemaining}</p></div>
           </div>
         )}
         {inspectedPack && (
@@ -924,6 +821,7 @@ function Index() {
           onPointerUp={onPointerUp}
           onPointerCancel={onPointerUp}
           style={{
+            boxShadow: "var(--shadow-card)",
             ...(exiting
               ? {
                   transform: `translateY(${exiting === "up" ? -1400 : 1400}px) rotate(${exiting === "up" ? -6 : 6}deg) scale(0.92)`,
@@ -936,10 +834,18 @@ function Index() {
                   transition: dragStart.current === null ? "transform 200ms ease-out" : "none",
                 }),
           }}
-          className="relative flex aspect-[2/3] w-full touch-none flex-col items-center justify-center text-center select-none"
+          className={cn(
+            "fc-card",
+            skin.cls,
+            "relative flex flex-1 touch-none flex-col items-center justify-center rounded-3xl px-6 py-10 text-center select-none",
+          )}
         >
-          <img src={skin.artwork} alt="" aria-hidden="true" className="absolute inset-0 z-0 size-full object-contain" />
-          <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center px-6 py-10 text-slate-900">
+          <img src={skin.artwork} alt="" aria-hidden="true" className="absolute inset-0 z-0 size-full rounded-3xl object-cover" />
+          <div className="absolute inset-0 z-0 rounded-3xl bg-black/5" aria-hidden="true" />
+          <div className="relative z-10 flex w-full flex-1 flex-col items-center justify-center">
+            <span className="absolute top-3 left-0 font-display text-[0.6rem] tracking-[0.3em] opacity-70">
+              {skin.label}
+            </span>
             <span
               className={cn(
                 "absolute top-1 left-1/2 -translate-x-1/2 rounded-full bg-success px-4 py-1 font-display text-xl text-success-foreground transition-opacity",
@@ -958,30 +864,30 @@ function Index() {
             </span>
 
             <div className="w-full">
-              <p className="font-display text-xs tracking-[0.4em] text-slate-700 opacity-80">EXPLAIN THIS PLAYER</p>
-              <h2 className="mt-2 text-[clamp(2.25rem,11vw,3.5rem)] leading-[0.95] font-black uppercase text-slate-950">
+              <p className="font-display text-xs tracking-[0.4em] opacity-60">EXPLAIN THIS PLAYER</p>
+              <h2 className="mt-2 text-[clamp(2.25rem,11vw,3.5rem)] leading-[0.95] font-black uppercase">
                 {player.name}
               </h2>
             </div>
 
-            <div className="my-8 h-px w-24 bg-slate-900/25" />
+            <div className="my-8 h-px w-24 bg-current opacity-25" />
 
-            <dl className="grid w-full grid-cols-3 gap-3 text-slate-900">
-              <div>
-                <dt className="font-display text-[0.65rem] tracking-widest text-slate-700 opacity-80">POS</dt>
-                <dd className="font-display text-3xl text-slate-900">{player.position}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="font-display text-[0.65rem] tracking-widest text-slate-700 opacity-80">CLUB</dt>
-                <dd className="text-sm leading-tight font-bold text-slate-900">{player.club}</dd>
-              </div>
-              <div className="min-w-0">
-                <dt className="font-display text-[0.65rem] tracking-widest text-slate-700 opacity-80">NATION</dt>
-                <dd className="text-sm leading-tight font-bold text-slate-900">
-                  <span className="mr-1">{player.flag}</span>
-                  {player.nation}
-                </dd>
-              </div>
+            <dl className="grid w-full grid-cols-3 gap-3">
+            <div>
+              <dt className="font-display text-[0.65rem] tracking-widest opacity-60">POS</dt>
+              <dd className="font-display text-3xl">{player.position}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="font-display text-[0.65rem] tracking-widest opacity-60">CLUB</dt>
+              <dd className="text-sm leading-tight font-bold">{player.club}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="font-display text-[0.65rem] tracking-widest opacity-60">NATION</dt>
+              <dd className="text-sm leading-tight font-bold">
+                <span className="mr-1">{player.flag}</span>
+                {player.nation}
+              </dd>
+            </div>
             </dl>
           </div>
         </div>
