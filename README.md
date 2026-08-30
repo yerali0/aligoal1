@@ -40,3 +40,13 @@ cd <repository-name>
 npm i
 npm run dev
 ```
+
+## Native rewarded ads
+
+Pack unlocking uses `@capacitor-community/admob` with Google's rewarded-ad test unit:
+`ca-app-pub-3940256099942544/5224354917`. The web build does not show native ads; run
+the app through an Android or iOS Capacitor project to test the rewarded flow.
+
+Before building a native app, add your AdMob application ID to the platform configuration
+required by the plugin, then run `npx cap sync`. Replace the test rewarded unit ID in
+`src/routes/index.tsx` with your production unit only after testing is complete.

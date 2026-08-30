@@ -1,5 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Capacitor } from "@capacitor/core";
+import { AdMob, RewardAdPluginEvents } from "@capacitor-community/admob";
 import {
   Check,
   X,
@@ -90,6 +92,7 @@ type Team = { id: number; name: string; score: number };
 type Screen = "menu" | "game" | "packs";
 
 const PACK_UNLOCK_STORAGE_KEY = "kick-off-alias-pack-unlocks";
+const TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
 const PACK_ARTWORK: Record<string, string> = {
   top5: "/packs/top5.svg",
   premier: "/packs/premier-league.svg",
@@ -97,7 +100,7 @@ const PACK_ARTWORK: Record<string, string> = {
   seriea: "/packs/serie-a.svg",
   bundesliga: "/packs/bundesliga.svg",
   ligue1: "/packs/ligue-1.svg",
-  mls: "/packs/MLS.svg",
+  mls: "/packs/mls.svg",
   womens: "/packs/womens.svg",
   legends2000s: "/packs/legends-2000s.svg",
   worldcup: "/packs/world-cup.svg",
@@ -138,7 +141,9 @@ function Index() {
   const [adsWatched, setAdsWatched] = useState<Record<string, number>>({});
   const [unlockProgressLoaded, setUnlockProgressLoaded] = useState(false);
   const [watchingPackId, setWatchingPackId] = useState<string | null>(null);
-  const [adSecondsRemaining, setAdSecondsRemaining] = useState(3);
+  const [adError, setAdError] = useState<string | null>(null);
+  const rewardPackRef = useRef<string | null>(null);
+  const rewardGrantedRef = useRef(false);
 
   useEffect(() => {
     preloadSounds();
@@ -195,28 +200,34 @@ function Index() {
   }, [adsWatched, unlockProgressLoaded]);
 
   useEffect(() => {
-    if (!watchingPackId) return;
+    if (!Capacitor.isNativePlatform()) return;
 
-    setAdSecondsRemaining(3);
-    const countdown = window.setInterval(() => {
-      setAdSecondsRemaining((secondsRemaining) => Math.max(0, secondsRemaining - 1));
-    }, 1000);
-    const finishAd = window.setTimeout(() => {
-      const pack = packs.find((item) => item.id === watchingPackId);
+    let active = true;
+    let listener: { remove: () => Promise<void> } | null = null;
+    void AdMob.initialize({ initializeForTesting: true }).catch((error) => {
+      if (active) console.error("Unable to initialize AdMob", error);
+    });
+    void AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
+      if (rewardGrantedRef.current || !rewardPackRef.current) return;
+      rewardGrantedRef.current = true;
+      const packId = rewardPackRef.current;
+      const pack = packs.find((item) => item.id === packId);
       if (pack?.adsRequired) {
         setAdsWatched((watched) => ({
           ...watched,
           [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
         }));
       }
-      setWatchingPackId(null);
-    }, 3000);
+    }).then((handle) => {
+      if (active) listener = handle;
+      else void handle.remove();
+    });
 
     return () => {
-      window.clearInterval(countdown);
-      window.clearTimeout(finishAd);
+      active = false;
+      if (listener) void listener.remove();
     };
-  }, [packs, watchingPackId]);
+  }, [packs]);
   const [turn, setTurn] = useState(0);
   const [editingId, setEditingId] = useState<number | null>(null);
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -377,11 +388,28 @@ function Index() {
     );
   };
 
-  const startAd = (pack: (typeof packs)[number]) => {
+  const startAd = async (pack: (typeof packs)[number]) => {
     if (!pack.adsRequired || watchingPackId || isPackUnlocked(pack)) return;
     const prerequisite = pack.requires ? packs.find((candidate) => candidate.id === pack.requires) : null;
     if (prerequisite && !isPackUnlocked(prerequisite)) return;
+    if (!Capacitor.isNativePlatform()) {
+      setAdError("Rewarded ads are available in the Android or iOS app.");
+      return;
+    }
+
+    setAdError(null);
     setWatchingPackId(pack.id);
+    rewardPackRef.current = pack.id;
+    rewardGrantedRef.current = false;
+    try {
+      await AdMob.prepareRewardVideoAd({ adId: TEST_REWARDED_AD_UNIT_ID });
+      await AdMob.showRewardVideoAd({ adId: TEST_REWARDED_AD_UNIT_ID });
+    } catch (error) {
+      console.error("Rewarded ad was not completed", error);
+    } finally {
+      setWatchingPackId(null);
+      rewardPackRef.current = null;
+    }
   };
 
   const ownedPacks = packs.filter((pack) => isPackUnlocked(pack));
@@ -404,7 +432,7 @@ function Index() {
         <header className="flex items-start justify-between">
           <div>
             <p className="font-display text-sm tracking-[0.35em] text-primary">AliGoal</p>
-            <h1 className="mt-3 max-w-xl text-7xl leading-[0.82] text-glow sm:text-9xl">PLAY THE BEAUTIFUL GAME</h1>
+            <h1 className="mt-3 max-w-xl text-7xl leading-[0.82] text-glow sm:text-9xl">GUESS THE FOOTBALL STARS</h1>
           </div>
           <ThemeToggle />
         </header>
@@ -416,7 +444,7 @@ function Index() {
           >
             <span className="flex items-center gap-3 text-primary"><Play className="size-5 fill-current" /> MAIN MATCH</span>
             <span className="mt-10 block font-display text-6xl leading-none sm:text-8xl">PLAY</span>
-            <span className="mt-3 block max-w-xs text-sm text-white/65">Set the rules, name your teams, and race to the final whistle.</span>
+            <span className="mt-3 block max-w-xs text-sm text-white/65">Test your football IQ, set your timer, and swipe through cards!</span>
             <span className="mt-8 flex items-center gap-2 font-display text-xl text-primary">ENTER GAME <ArrowLeft className="size-5 rotate-180 transition-transform group-hover:translate-x-1" /></span>
           </button>
           <button
@@ -426,7 +454,7 @@ function Index() {
           >
             <span className="flex items-center gap-3 text-primary"><ShoppingBag className="size-5" /> PACK SHOP</span>
             <span className="mt-10 block font-display text-6xl leading-none sm:text-8xl">PACKS</span>
-            <span className="mt-3 block text-sm text-white/65">Build your player pool with leagues from around the world.</span>
+            <span className="mt-3 block text-sm text-white/65">Unlock new card packs, leagues, and football icons!</span>
             <span className="mt-8 flex items-center gap-2 font-display text-xl text-primary">BROWSE PACKS <ArrowLeft className="size-5 rotate-180 transition-transform group-hover:translate-x-1" /></span>
           </button>
         </section>
@@ -484,7 +512,12 @@ function Index() {
         </div>
         {watchingPackId && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-background/85 px-6 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]"><p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p><h2 className="mt-3 text-4xl text-glow">WATCHING AD...</h2><p className="mt-3 text-sm text-muted-foreground">Unlocking {packs.find((pack) => pack.id === watchingPackId)?.name}</p><p className="mt-6 font-display text-7xl text-primary">{adSecondsRemaining}</p></div>
+            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]"><p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p><h2 className="mt-3 text-4xl text-glow">LOADING AD...</h2><p className="mt-3 text-sm text-muted-foreground">Watch the full video to unlock {packs.find((pack) => pack.id === watchingPackId)?.name}.</p></div>
+          </div>
+        )}
+        {adError && (
+          <div className="fixed inset-x-5 bottom-5 z-50 mx-auto max-w-md rounded-2xl border border-destructive/50 bg-card px-4 py-3 text-center text-sm text-destructive shadow-lg">
+            {adError}
           </div>
         )}
         {inspectedPack && (

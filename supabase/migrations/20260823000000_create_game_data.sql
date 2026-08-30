@@ -36,16 +36,16 @@ create index if not exists player_cards_pack_id_sort_order_idx
 -- dataset and inserts it in batches with a server-only service role key.
 insert into public.packs (id, name, tagline, is_free, ads_required, requires_pack_id)
 values
-  ('top5', 'Top 5 Leagues Mix', 'Current stars of Europe''s elite', true, null, null),
-  ('premier', 'Premier League', 'England''s top flight', true, null, null),
-  ('womens', 'Women''s Football', 'The best of the women''s game', true, null, null),
-  ('bundesliga', 'Bundesliga', 'German powerhouses', false, 3, null),
-  ('laliga', 'La Liga', 'Spanish flair', false, 3, 'bundesliga'),
-  ('seriea', 'Serie A', 'Italian tactics and icons', false, 3, null),
-  ('ligue1', 'Ligue 1', 'France''s finest', false, 3, 'seriea'),
-  ('mls', 'MLS', 'Stateside stars and imports', false, 5, null),
-  ('legends2000s', '2000s Legends', 'Icons of the golden era', false, 5, null),
-  ('worldcup', 'World Cup Icons', 'Made their name on the biggest stage', false, 5, null)
+  ('top5', 'Top 5 Leagues Mix', 'Europe''s biggest superstars from the top 5 leagues.', true, null, null),
+  ('premier', 'Premier League', 'The world''s most competitive league & match winners.', true, null, null),
+  ('womens', 'Women''s Football', 'The absolute best stars in the women''s game.', true, null, null),
+  ('bundesliga', 'Bundesliga', 'High-octane goals, lethal strikers, and German heavyweights.', false, 3, null),
+  ('laliga', 'La Liga', 'Spanish flair, world-class talent, and pure ballers.', false, 3, 'bundesliga'),
+  ('seriea', 'Serie A', 'Tactical masterminds, brick-wall defenders, and Italian legends.', false, 3, null),
+  ('ligue1', 'Ligue 1', 'Pacy wingers, French giants, and future wonderkids.', false, 3, 'seriea'),
+  ('mls', 'MLS', 'Stateside stars, DP icons, and North American talent.', false, 5, null),
+  ('legends2000s', '2000s Legends', 'Nostalgic ballers, prime icons, and childhood heroes.', false, 5, null),
+  ('worldcup', 'World Cup Icons', 'Tournament legends who defined international football.', false, 5, null)
 on conflict (id) do update set
   name = excluded.name,
   tagline = excluded.tagline,
