@@ -1,7 +1,7 @@
+import { AdMob, RewardAdPluginEvents, type AdMobRewardItem } from "@capacitor-community/admob";
+import { Capacitor } from "@capacitor/core";
 import { createFileRoute } from "@tanstack/react-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Capacitor } from "@capacitor/core";
-import { AdMob, RewardAdPluginEvents } from "@capacitor-community/admob";
 import {
   Check,
   X,
@@ -92,7 +92,7 @@ type Team = { id: number; name: string; score: number };
 type Screen = "menu" | "game" | "packs";
 
 const PACK_UNLOCK_STORAGE_KEY = "kick-off-alias-pack-unlocks";
-const TEST_REWARDED_AD_UNIT_ID = "ca-app-pub-3940256099942544/5224354917";
+const PACK_UNLOCK_AD_ID = "ca-app-pub-3940256099942544/5224354917";
 const PACK_ARTWORK: Record<string, string> = {
   top5: "/packs/top5.svg",
   premier: "/packs/premier-league.svg",
@@ -141,9 +141,8 @@ function Index() {
   const [adsWatched, setAdsWatched] = useState<Record<string, number>>({});
   const [unlockProgressLoaded, setUnlockProgressLoaded] = useState(false);
   const [watchingPackId, setWatchingPackId] = useState<string | null>(null);
-  const [adError, setAdError] = useState<string | null>(null);
-  const rewardPackRef = useRef<string | null>(null);
-  const rewardGrantedRef = useRef(false);
+  const [adMode, setAdMode] = useState<"simulate" | null>(null);
+  const [adSecondsRemaining, setAdSecondsRemaining] = useState(3);
 
   useEffect(() => {
     preloadSounds();
@@ -200,34 +199,46 @@ function Index() {
   }, [adsWatched, unlockProgressLoaded]);
 
   useEffect(() => {
-    if (!Capacitor.isNativePlatform()) return;
+    if (!watchingPackId || adMode !== "simulate") return;
 
-    let active = true;
-    let listener: { remove: () => Promise<void> } | null = null;
-    void AdMob.initialize({ initializeForTesting: true }).catch((error) => {
-      if (active) console.error("Unable to initialize AdMob", error);
-    });
-    void AdMob.addListener(RewardAdPluginEvents.Rewarded, () => {
-      if (rewardGrantedRef.current || !rewardPackRef.current) return;
-      rewardGrantedRef.current = true;
-      const packId = rewardPackRef.current;
-      const pack = packs.find((item) => item.id === packId);
+    setAdSecondsRemaining(3);
+    const countdown = window.setInterval(() => {
+      setAdSecondsRemaining((secondsRemaining) => Math.max(0, secondsRemaining - 1));
+    }, 1000);
+    const finishAd = window.setTimeout(() => {
+      const pack = packs.find((item) => item.id === watchingPackId);
       if (pack?.adsRequired) {
-        setAdsWatched((watched) => ({
-          ...watched,
-          [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
-        }));
+        setAdsWatched((watched) => {
+          const nextWatched = {
+            ...watched,
+            [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
+          };
+          try {
+            window.localStorage.setItem(PACK_UNLOCK_STORAGE_KEY, JSON.stringify(nextWatched));
+          } catch {
+            // Ignore localStorage write failures and keep the app playable.
+          }
+          return nextWatched;
+        });
       }
-    }).then((handle) => {
-      if (active) listener = handle;
-      else void handle.remove();
-    });
+      setWatchingPackId(null);
+      setAdMode(null);
+      setAdSecondsRemaining(3);
+    }, 3000);
 
     return () => {
-      active = false;
-      if (listener) void listener.remove();
+      window.clearInterval(countdown);
+      window.clearTimeout(finishAd);
     };
-  }, [packs]);
+  }, [adMode, packs, watchingPackId]);
+
+  useEffect(() => {
+    if (Capacitor.isNativePlatform()) {
+      void AdMob.initialize().catch((error) => {
+        console.warn("AdMob initialization failed:", error);
+      });
+    }
+  }, []);
   const [turn, setTurn] = useState(0);
   const [editingId, setEditingId] = useState<number | null>(null);
   const holdRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -388,28 +399,67 @@ function Index() {
     );
   };
 
-  const startAd = async (pack: (typeof packs)[number]) => {
-    if (!pack.adsRequired || watchingPackId || isPackUnlocked(pack)) return;
-    const prerequisite = pack.requires ? packs.find((candidate) => candidate.id === pack.requires) : null;
-    if (prerequisite && !isPackUnlocked(prerequisite)) return;
-    if (!Capacitor.isNativePlatform()) {
-      setAdError("Rewarded ads are available in the Android or iOS app.");
-      return;
-    }
+  const grantPackReward = useCallback(
+    (packId: string) => {
+      const pack = packs.find((item) => item.id === packId);
+      if (!pack?.adsRequired) return;
 
-    setAdError(null);
-    setWatchingPackId(pack.id);
-    rewardPackRef.current = pack.id;
-    rewardGrantedRef.current = false;
-    try {
-      await AdMob.prepareRewardVideoAd({ adId: TEST_REWARDED_AD_UNIT_ID });
-      await AdMob.showRewardVideoAd({ adId: TEST_REWARDED_AD_UNIT_ID });
-    } catch (error) {
-      console.error("Rewarded ad was not completed", error);
-    } finally {
-      setWatchingPackId(null);
-      rewardPackRef.current = null;
-    }
+      setAdsWatched((watched) => {
+        const nextWatched = {
+          ...watched,
+          [pack.id]: Math.min((watched[pack.id] ?? 0) + 1, pack.adsRequired!),
+        };
+        try {
+          window.localStorage.setItem(PACK_UNLOCK_STORAGE_KEY, JSON.stringify(nextWatched));
+        } catch {
+          // Ignore localStorage write failures and keep the app playable.
+        }
+        return nextWatched;
+      });
+    },
+    [packs],
+  );
+
+  const showPackUnlockAd = useCallback(
+    async (pack: (typeof packs)[number]) => {
+      if (!pack.adsRequired || watchingPackId || isPackUnlocked(pack)) return;
+      const prerequisite = pack.requires ? packs.find((candidate) => candidate.id === pack.requires) : null;
+      if (prerequisite && !isPackUnlocked(prerequisite)) return;
+
+      if (!Capacitor.isNativePlatform()) {
+        setWatchingPackId(pack.id);
+        setAdMode("simulate");
+        return;
+      }
+
+      setWatchingPackId(pack.id);
+      setAdMode(null);
+
+      let rewardListener: Awaited<ReturnType<typeof AdMob.addListener>> | null = null;
+
+      try {
+        rewardListener = await AdMob.addListener(RewardAdPluginEvents.Rewarded, (reward: AdMobRewardItem) => {
+          void rewardListener?.remove();
+          console.log("Pack unlock reward granted", reward);
+          grantPackReward(pack.id);
+          setWatchingPackId(null);
+          setAdMode(null);
+        });
+
+        await AdMob.prepareRewardVideoAd({ adId: PACK_UNLOCK_AD_ID });
+        await AdMob.showRewardVideoAd();
+      } catch (error) {
+        console.warn("Pack unlock rewarded ad failed, falling back to simulated ad:", error);
+        void rewardListener?.remove();
+        setWatchingPackId(pack.id);
+        setAdMode("simulate");
+      }
+    },
+    [grantPackReward, isPackUnlocked, watchingPackId],
+  );
+
+  const startAd = (pack: (typeof packs)[number]) => {
+    void showPackUnlockAd(pack);
   };
 
   const ownedPacks = packs.filter((pack) => isPackUnlocked(pack));
@@ -500,7 +550,11 @@ function Index() {
                   </div>
                   <div className="mt-5 flex items-center gap-2">
                     <button type="button" onClick={() => unlocked ? undefined : startAd(pack)} disabled={unlocked || (!prerequisiteUnlocked || Boolean(watchingPackId))} className="flex-1 rounded-xl bg-primary py-3 font-display text-lg text-primary-foreground transition-opacity disabled:cursor-not-allowed disabled:opacity-50">
-                      {unlocked ? "OWNED" : `EARN · ${watched}/${required}`}
+                      {unlocked
+                        ? "OWNED"
+                        : watchingPackId === pack.id
+                          ? `WATCHING ${adSecondsRemaining}s`
+                          : `WATCH AD · ${watched}/${required}`}
                     </button>
                     <button type="button" onClick={() => setInspectedPackId(pack.id)} className="grid size-12 place-items-center rounded-xl border border-border bg-background text-primary transition-colors hover:bg-accent" aria-label={`Inspect ${pack.name}`} title="Inspect pack"><Eye className="size-5" /></button>
                   </div>
@@ -510,14 +564,14 @@ function Index() {
             );
           })}
         </div>
-        {watchingPackId && (
+        {watchingPackId && adMode === "simulate" && (
           <div className="fixed inset-0 z-50 grid place-items-center bg-background/85 px-6 backdrop-blur-sm">
-            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]"><p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p><h2 className="mt-3 text-4xl text-glow">LOADING AD...</h2><p className="mt-3 text-sm text-muted-foreground">Watch the full video to unlock {packs.find((pack) => pack.id === watchingPackId)?.name}.</p></div>
-          </div>
-        )}
-        {adError && (
-          <div className="fixed inset-x-5 bottom-5 z-50 mx-auto max-w-md rounded-2xl border border-destructive/50 bg-card px-4 py-3 text-center text-sm text-destructive shadow-lg">
-            {adError}
+            <div className="w-full max-w-sm rounded-3xl border border-primary/50 bg-card p-8 text-center shadow-[var(--shadow-glow)]">
+              <p className="font-display text-sm tracking-[0.3em] text-primary">ADVERTISEMENT</p>
+              <h2 className="mt-3 text-4xl text-glow">WATCH AD</h2>
+              <p className="mt-3 text-sm text-muted-foreground">Unlocking {packs.find((pack) => pack.id === watchingPackId)?.name}</p>
+              <p className="mt-6 font-display text-7xl text-primary">{adSecondsRemaining}</p>
+            </div>
           </div>
         )}
         {inspectedPack && (
